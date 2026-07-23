@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ban Argentina from WC 2030 — The People's Petition</title>
+  <meta
+    name="description"
+    content="Sign the petition to ban the Argentina national squad from the 2030 World Cup, and chip in to help us file it."
+  />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <!-- Banner shown while Stripe keys are not configured -->
+  <div id="demo-banner" class="demo-banner" hidden>
+    Demo mode — donations are simulated. Add your Stripe keys in <code>.env</code> to go live.
+  </div>
+
+  <header class="site-header">
+    <a class="brand" href="#top">
+      <span class="brand-mark">⛔</span>
+      <span class="brand-text">BAN&nbsp;<b>ARGENTINA</b>&nbsp;· WC 2030</span>
+    </a>
+    <nav class="nav">
+      <a href="#petition">Petition</a>
+      <a href="#evidence">Evidence</a>
+      <a href="#leaderboard">Top Donors</a>
+      <a class="nav-cta" href="#donate">Donate</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <!-- HERO -->
+    <section class="hero">
+      <div class="hero-inner">
+        <p class="kicker">The people have had enough</p>
+        <h1 class="hero-title">
+          Ban the <span class="strike">Argentina</span> squad<br />from the 2030 World Cup
+        </h1>
+        <p class="hero-sub">
+          We are filing a formal petition. If you think the <em>Albiceleste</em> pushed
+          the limits of sportsmanship one time too many, add your name — and if you're
+          feeling generous, help us cover the cost of filing it.
+        </p>
+
+        <div class="counter-row">
+          <div class="counter-card">
+            <span class="counter-value" id="signature-count">—</span>
+            <span class="counter-label">signatures</span>
+          </div>
+          <div class="counter-card">
+            <span class="counter-value" id="donor-count">—</span>
+            <span class="counter-label">donors</span>
+          </div>
+          <div class="counter-card">
+            <span class="counter-value" id="total-raised">—</span>
+            <span class="counter-label">raised</span>
+          </div>
+        </div>
+
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#petition">Sign the petition</a>
+          <a class="btn btn-ghost" href="#donate">Chip in →</a>
+        </div>
+        <p class="hero-fineprint">
+          A tongue-in-cheek fan campaign. Not affiliated with FIFA, CONMEBOL, or the AFA.
+        </p>
+      </div>
+    </section>
+
+    <!-- PETITION -->
+    <section id="petition" class="section">
+      <div class="section-head">
+        <h2>The petition</h2>
+        <p class="section-lead">
+          We, the undersigned football fans, respectfully petition the relevant
+          governing bodies to review the conduct of the Argentina national team and to
+          consider excluding the squad from the 2030 FIFA World Cup.
+        </p>
+      </div>
+
+      <div class="petition-grid">
+        <ul class="asks">
+          <li><b>Because</b> we love the beautiful game and want it played beautifully.</li>
+          <li><b>Because</b> gamesmanship shouldn't be a tactic.</li>
+          <li><b>Because</b> the rest of the group stage deserves a fair shot.</li>
+          <li><b>Because</b> a little accountability never hurt anyone.</li>
+        </ul>
+
+        <form id="petition-form" class="card form">
+          <h3>Add your name</h3>
+          <div class="field-row">
+            <label>First name
+              <input name="firstName" type="text" autocomplete="given-name" required />
+            </label>
+            <label>Last name
+              <input name="lastName" type="text" autocomplete="family-name" />
+            </label>
+          </div>
+          <label>Email
+            <input name="email" type="email" autocomplete="email" required />
+          </label>
+          <label>Country
+            <input name="country" type="text" autocomplete="country-name" />
+          </label>
+          <button class="btn btn-primary btn-block" type="submit">Sign the petition</button>
+          <p class="form-msg" id="petition-msg" role="status"></p>
+          <p class="form-fine">
+            We store your email only to verify signatures and to update you about the
+            campaign. We never sell it. Unsubscribe anytime.
+          </p>
+        </form>
+      </div>
+    </section>
+
+    <!-- EVIDENCE / VIDEOS -->
+    <section id="evidence" class="section section-dark">
+      <div class="section-head">
+        <h2>Exhibit A–D: the tape doesn't lie</h2>
+        <p class="section-lead">
+          A curated reel of the squad's most <em>talked-about</em> World Cup moments.
+          Watch, judge for yourself, then sign.
+        </p>
+      </div>
+      <!-- Video IDs are placeholders. Replace the data-yt values below with the
+           YouTube IDs of the clips you want to feature. -->
+      <div class="video-grid" id="video-grid">
+        <figure class="video-card" data-yt="dQw4w9WgXcQ">
+          <div class="video-embed"></div>
+          <figcaption>The tunnel. The theatrics. The full 97th minute.</figcaption>
+        </figure>
+        <figure class="video-card" data-yt="dQw4w9WgXcQ">
+          <div class="video-embed"></div>
+          <figcaption>Time-wasting, a masterclass in nine acts.</figcaption>
+        </figure>
+        <figure class="video-card" data-yt="dQw4w9WgXcQ">
+          <div class="video-embed"></div>
+          <figcaption>The celebration heard 'round the group chat.</figcaption>
+        </figure>
+        <figure class="video-card" data-yt="dQw4w9WgXcQ">
+          <div class="video-embed"></div>
+          <figcaption>Ref, VAR, and a very long conversation.</figcaption>
+        </figure>
+      </div>
+      <p class="evidence-note">
+        Clips are embedded from YouTube and remain the property of their creators.
+        This page presents publicly available footage for commentary and satire.
+      </p>
+    </section>
+
+    <!-- DONATE -->
+    <section id="donate" class="section">
+      <div class="section-head">
+        <h2>Fuel the campaign</h2>
+        <p class="section-lead">
+          Filing a petition, legal review, and getting the word out costs money.
+          Donate securely via Stripe — top donors get a daily shout-out below.
+        </p>
+      </div>
+
+      <form id="donate-form" class="card donate-card">
+        <div class="tier-row" id="tier-row">
+          <button type="button" class="tier" data-amount="10">10</button>
+          <button type="button" class="tier tier-active" data-amount="25">25</button>
+          <button type="button" class="tier" data-amount="50">50</button>
+          <button type="button" class="tier" data-amount="100">100</button>
+        </div>
+
+        <label class="amount-field">Or enter your own amount
+          <div class="amount-input">
+            <span class="amount-symbol" id="currency-symbol">€</span>
+            <input id="amount" name="amount" type="number" min="1" step="1" value="25" />
+          </div>
+        </label>
+
+        <div class="field-row">
+          <label>First name
+            <input name="firstName" type="text" autocomplete="given-name" />
+          </label>
+          <label>Last name
+            <input name="lastName" type="text" autocomplete="family-name" />
+          </label>
+        </div>
+
+        <label class="checkbox">
+          <input type="checkbox" id="consentPublic" checked />
+          <span>Show me on the daily Top Donors board (as “First&nbsp;L.” — never your full name).</span>
+        </label>
+
+        <button class="btn btn-primary btn-block" type="submit" id="donate-btn">
+          Donate <span id="donate-amount">€25</span>
+        </button>
+        <p class="form-msg" id="donate-msg" role="status"></p>
+        <p class="form-fine">
+          Payments are processed by Stripe; we never see your card details. Donations
+          fund campaign costs and are not tax-deductible.
+        </p>
+      </form>
+    </section>
+
+    <!-- LEADERBOARD -->
+    <section id="leaderboard" class="section section-dark">
+      <div class="section-head">
+        <h2>Today's most generous</h2>
+        <p class="section-lead">
+          Our hall of fame, refreshed daily. Shown as first name + last initial to keep
+          things private.
+        </p>
+      </div>
+
+      <div class="board-grid">
+        <div class="card board">
+          <h3>Top donors — today</h3>
+          <ol class="donor-list" id="donors-today">
+            <li class="donor-empty">Be the first today →</li>
+          </ol>
+        </div>
+        <div class="card board">
+          <h3>Hall of fame — all time</h3>
+          <ol class="donor-list" id="donors-alltime">
+            <li class="donor-empty">No donors yet.</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p class="footer-brand">⛔ BAN ARGENTINA · WC 2030</p>
+    <p class="footer-disclaimer">
+      This is an independent, satirical fan campaign. It is not affiliated with,
+      endorsed by, or connected to FIFA, CONMEBOL, the Argentine Football Association,
+      or any national team or player. “Argentina national squad” refers to the football
+      team as a public sporting entity. Donations support the running of this campaign
+      (petition filing, hosting, and outreach) and are voluntary and non-refundable
+      except as required by law.
+    </p>
+    <p class="footer-links">
+      <a href="#petition">Petition</a> ·
+      <a href="#donate">Donate</a> ·
+      <a href="#leaderboard">Top Donors</a>
+    </p>
+  </footer>
+
+  <!-- Toast -->
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="/main.js"></script>
+</body>
+</html>
