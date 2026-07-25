@@ -125,6 +125,13 @@ function makeRow(m, ht, at, lgHist, { window, shrink, leagueWindow }) {
     hCF, hCA, aCF, aCA,
     expHome, expAway, baseline, baselineAdditive,
     lgMean, lgHC, lgAC, mismatch, favIsHome, blockiness,
+    // favourite-only projection: the favourite's own corner count, with a
+    // venue-appropriate per-team league prior. This is where a territorial
+    // mismatch effect would show up if the match total is masking it (the
+    // favourite's extra corners are cancelled by the underdog's lost corners
+    // at the total level).
+    favBaseline: favIsHome === null ? null : (favIsHome ? expHome : expAway),
+    favLgMean: favIsHome === null ? null : (favIsHome ? lgHC : lgAC),
     nPriorHome: ht.home.length,
     nPriorAway: at.away.length,
     // outcomes (never used as features)

@@ -29,7 +29,22 @@ const rule = (n = 74) => console.log('-'.repeat(n));
 
 export function runBacktest(matches, opts = {}) {
   const line = opts.line ?? LINE;
-  const rows = buildDataset(matches, opts);
+  const target = opts.target ?? 'total';
+  let rows = buildDataset(matches, opts);
+
+  // Favourite-corners target: re-point actual/baseline/lgMean onto the
+  // favourite so every model runs unchanged. Rows with no odds (no favourite)
+  // are dropped — they cannot define a favourite corner count.
+  if (target === 'fav') {
+    const burnIn = rows.skippedBurnIn;
+    rows = rows.filter(r => r.favIsHome !== null);
+    rows.skippedBurnIn = burnIn;
+    rows.forEach(r => {
+      r.actual = r.actualFav;
+      r.baseline = r.favBaseline;
+      r.lgMean = r.favLgMean;
+    });
+  }
 
   if (rows.length < MIN_TRAIN + 50) {
     return { error: `Only ${rows.length} usable rows after burn-in; need >= ${MIN_TRAIN + 50}.`, rows };
@@ -275,9 +290,15 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.error('Run `node src/fetch.js` first, or pass --data <path>.');
     process.exit(1);
   }
-  console.log(`\nCORNERS BACKTEST — ${matches.length} raw matches, line ${LINE}`);
+  const target = arg('target', 'total');
+  // Favourite corner counts are roughly half a match total, so default the
+  // favourite line to 5.5 unless the caller sets one explicitly.
+  const line = argv.includes('--line') ? LINE : (target === 'fav' ? 5.5 : LINE);
+  const label = target === 'fav' ? "FAVOURITE'S corners" : 'MATCH TOTAL corners';
+  console.log(`\nCORNERS BACKTEST — ${matches.length} raw matches, ${label}, line ${line}`);
   printReport(runBacktest(matches, {
-    line: LINE,
+    line,
+    target,
     window: parseInt(arg('window', '10'), 10),
     minPrior: parseInt(arg('minPrior', '6'), 10),
     shrink: parseFloat(arg('shrink', '5')),
