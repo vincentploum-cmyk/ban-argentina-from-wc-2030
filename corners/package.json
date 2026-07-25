@@ -1,0 +1,12 @@
+{
+  "name": "fhs-corners",
+  "version": "0.1.0",
+  "description": "Point-in-time corners projection and walk-forward backtest for firsthalfscore.com",
+  "type": "module",
+  "scripts": {
+    "fetch": "node src/fetch.js",
+    "backtest": "node src/backtest.js",
+    "selftest": "node src/selftest.js"
+  },
+  "license": "UNLICENSED"
+}
