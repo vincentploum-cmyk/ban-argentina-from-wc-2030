@@ -87,15 +87,28 @@ async function fetchSeason(sid) {
         if (ov > 1 && un > 1) cornerOU[line] = { over: ov, under: un };
       }
 
+      // FootyStats' OWN pre-game corner projection and over-probabilities.
+      // pot = projected total corners; poX = their estimated P(over X.5).
+      const pot = num(m.corners_potential);
+      const potential = {
+        total: pot,
+        o85: num(m.corners_o85_potential),
+        o95: num(m.corners_o95_potential),
+        o105: num(m.corners_o105_potential),
+      };
+      const hasPot = pot !== null && pot > 0;
+
       out.push({
         date: m.date_unix,
         league: `S${sid}`,
         home: m.home_name,
         away: m.away_name,
         hc, ac,
+        fhHc: num(m.team_a_fh_corners), fhAc: num(m.team_b_fh_corners),
         ...(o1 > 1 && ox > 1 && o2 > 1 ? { odds: { h: o1, d: ox, a: o2 } } : {}),
         ...(corner3 ? { corner3 } : {}),
         ...(Object.keys(cornerOU).length ? { cornerOU } : {}),
+        ...(hasPot ? { potential } : {}),
       });
     }
 
@@ -114,8 +127,8 @@ for (const sid of SEASONS) {
     all.push(...rows);
     const withOdds = rows.filter(r => r.odds).length;
     const with3 = rows.filter(r => r.corner3).length;
-    const withOU = rows.filter(r => r.cornerOU).length;
-    console.log(`${rows.length} matches with corners (${withOdds} 1X2, ${with3} corner-3way, ${withOU} corner-O/U)`);
+    const withPot = rows.filter(r => r.potential).length;
+    console.log(`${rows.length} matches with corners (${withOdds} 1X2, ${with3} corner-3way, ${withPot} FootyStats corner projection)`);
   } catch (e) {
     console.log(`FAILED: ${e.message}`);
   }
