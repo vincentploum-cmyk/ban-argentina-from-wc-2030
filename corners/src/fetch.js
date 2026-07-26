@@ -97,12 +97,21 @@ async function fetchSeason(sid) {
       const sotA = pick(['team_b_shotsOnTarget', 'team_b_shots_on_target', 'awayShotsOnTarget']);
       const possH = pick(['team_a_possession', 'home_possession']);
       const possA = pick(['team_b_possession', 'away_possession']);
-      const daH = pick(['team_a_dangerous_attacks', 'team_a_dangerousAttacks']);
-      const daA = pick(['team_b_dangerous_attacks', 'team_b_dangerousAttacks']);
+      // Territorial-pressure metrics. Dangerous attacks separates dominant from
+      // dominated sides harder than corners themselves do, which is exactly what
+      // a corner predictor wants: more dynamic range than the target.
+      const daH = pick(['team_a_dangerous_attacks', 'team_a_dangerousAttacks', 'team_a_dangerous_attack']);
+      const daA = pick(['team_b_dangerous_attacks', 'team_b_dangerousAttacks', 'team_b_dangerous_attack']);
+      const atkH = pick(['team_a_attacks', 'team_a_attack']);
+      const atkA = pick(['team_b_attacks', 'team_b_attack']);
+      const twH = pick(['team_a_throwins', 'team_a_throw_ins', 'team_a_throwIns']);
+      const twA = pick(['team_b_throwins', 'team_b_throw_ins', 'team_b_throwIns']);
       const shots = (shotsH !== null && shotsA !== null) ? { h: shotsH, a: shotsA } : null;
       const sot = (sotH !== null && sotA !== null) ? { h: sotH, a: sotA } : null;
       const poss = (possH !== null && possA !== null) ? { h: possH, a: possA } : null;
       const dangAtt = (daH !== null && daA !== null) ? { h: daH, a: daA } : null;
+      const attacks = (atkH !== null && atkA !== null) ? { h: atkH, a: atkA } : null;
+      const throwins = (twH !== null && twA !== null) ? { h: twH, a: twA } : null;
 
       // FootyStats' OWN pre-game corner projection and over-probabilities.
       // pot = projected total corners; poX = their estimated P(over X.5).
@@ -126,6 +135,8 @@ async function fetchSeason(sid) {
         ...(sot ? { sot } : {}),
         ...(poss ? { poss } : {}),
         ...(dangAtt ? { dangAtt } : {}),
+        ...(attacks ? { attacks } : {}),
+        ...(throwins ? { throwins } : {}),
         ...(o1 > 1 && ox > 1 && o2 > 1 ? { odds: { h: o1, d: ox, a: o2 } } : {}),
         ...(corner3 ? { corner3 } : {}),
         ...(Object.keys(cornerOU).length ? { cornerOU } : {}),
@@ -147,10 +158,9 @@ for (const sid of SEASONS) {
     const rows = await fetchSeason(sid);
     all.push(...rows);
     const withOdds = rows.filter(r => r.odds).length;
-    const withShots = rows.filter(r => r.shots).length;
+    const cov = k => rows.filter(r => r[k]).length;
     const withFH = rows.filter(r => Number.isFinite(r.fhHc) && Number.isFinite(r.fhAc)).length;
-    const withPot = rows.filter(r => r.potential).length;
-    console.log(`${rows.length} matches (${withShots} w/ shots, ${withFH} w/ FH corners, ${withPot} w/ FS projection)`);
+    console.log(`${rows.length} matches | FHcorners ${withFH} | shots ${cov('shots')} | sot ${cov('sot')} | dangAtt ${cov('dangAtt')} | attacks ${cov('attacks')} | poss ${cov('poss')} | throwins ${cov('throwins')}`);
   } catch (e) {
     console.log(`FAILED: ${e.message}`);
   }

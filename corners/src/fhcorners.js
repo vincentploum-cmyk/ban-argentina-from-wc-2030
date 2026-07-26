@@ -125,12 +125,20 @@ for (const m of raw) {
     const side = (atkRoll, defRoll, target) => {
       const aS = atkRoll.filter(x => x.sf !== null), dS = defRoll.filter(x => x.sf !== null);
       if (aS.length < MIN_PRIOR || dS.length < MIN_PRIOR) return null;
+      // Generic for/against blend for any volume metric, null when uncovered.
+      const blend = (fk, ak, prior) => {
+        const af = atkRoll.filter(x => x[fk] != null), df = defRoll.filter(x => x[ak] != null);
+        if (af.length < MIN_PRIOR || df.length < MIN_PRIOR) return null;
+        return shrunk(af.map(x => x[fk]), prior, SHRINK) + shrunk(df.map(x => x[ak]), prior, SHRINK);
+      };
       return {
         date: m.date, target, lgFHteam,
         cProj: shrunk(atkRoll.map(x => x.cf), lgCFor, SHRINK) + shrunk(defRoll.map(x => x.ca), lgCFor, SHRINK),
         sProj: shrunk(aS.map(x => x.sf), lgSFor, SHRINK) + shrunk(dS.map(x => x.sa), lgSFor, SHRINK),
-        sotProj: (aS[0].sotf !== null && dS[0].sota !== null)
-          ? shrunk(aS.map(x => x.sotf), lgSFor / 3, SHRINK) + shrunk(dS.map(x => x.sota), lgSFor / 3, SHRINK) : null,
+        sotProj: blend('sotf', 'sota', lgSFor / 3),
+        daProj: blend('daf', 'daa', 40),      // dangerous attacks ~40/team/match
+        atkProj: blend('atkf', 'atka', 100),  // attacks ~100/team/match
+        possProj: blend('possf', 'possa', 50),
       };
     };
     const homeAtk = side(hH, aA, m.fhHc);   // home attacking vs away defending
@@ -140,17 +148,32 @@ for (const m of raw) {
   }
 
   // update state AFTER emitting
-  ht.home.push({ cf: m.hc, ca: m.ac, sf: haveShots ? m.shots.h : null, sa: haveShots ? m.shots.a : null, sotf: haveSot ? m.sot.h : null, sota: haveSot ? m.sot.a : null });
-  at.away.push({ cf: m.ac, ca: m.hc, sf: haveShots ? m.shots.a : null, sa: haveShots ? m.shots.h : null, sotf: haveSot ? m.sot.a : null, sota: haveSot ? m.sot.h : null });
+  const g = (o, side) => (o && Number.isFinite(o[side]) ? o[side] : null);
+  ht.home.push({
+    cf: m.hc, ca: m.ac,
+    sf: haveShots ? m.shots.h : null, sa: haveShots ? m.shots.a : null,
+    sotf: haveSot ? m.sot.h : null, sota: haveSot ? m.sot.a : null,
+    daf: g(m.dangAtt, 'h'), daa: g(m.dangAtt, 'a'),
+    atkf: g(m.attacks, 'h'), atka: g(m.attacks, 'a'),
+    possf: g(m.poss, 'h'), possa: g(m.poss, 'a'),
+  });
+  at.away.push({
+    cf: m.ac, ca: m.hc,
+    sf: haveShots ? m.shots.a : null, sa: haveShots ? m.shots.h : null,
+    sotf: haveSot ? m.sot.a : null, sota: haveSot ? m.sot.h : null,
+    daf: g(m.dangAtt, 'a'), daa: g(m.dangAtt, 'h'),
+    atkf: g(m.attacks, 'a'), atka: g(m.attacks, 'h'),
+    possf: g(m.poss, 'a'), possa: g(m.poss, 'h'),
+  });
   if (haveFH) { L.fhTeam.push(m.fhHc); L.fhTeam.push(m.fhAc); }
   L.cFor.push(m.hc); L.cFor.push(m.ac);
   if (haveShots) { L.sFor.push(m.shots.h); L.sFor.push(m.shots.a); }
   lg.set(m.league, L);
 }
 
-// Require BOTH shot and SoT features so every model is compared on identical
-// fixtures — the corners-vs-corners+sot delta must not be a sample artifact.
-const usable = rows.filter(r => r.sProj !== null && r.sotProj !== null);
+// Require shot features so every model is compared on identical fixtures —
+// feature deltas must not be sample artifacts.
+const usable = rows.filter(r => r.sProj !== null);
 console.log('\nC) WALK-FORWARD PREDICTION OF PER-TEAM FIRST-HALF CORNERS');
 rule();
 console.log('target: one team\'s own first-half corners (2 obs/match). This is where the');
@@ -158,19 +181,27 @@ console.log('team-level signal from A/B lives — the match total cancels it out
 if (usable.length < MIN_TRAIN + 50) {
   console.log(`\nOnly ${usable.length} observations have shot features — need >= ${MIN_TRAIN + 50}.`);
 } else {
-  const hasSot = usable.filter(r => r.sotProj !== null).length > usable.length * 0.8;
-  // Ordered so the production-relevant comparison is adjacent and obvious:
-  // `corners` is the current production feature; `corners+sot` is the exact
-  // proposed upgrade (production carries sot/sota, not total shots). The
-  // total-shots variants are kept only as a richer-data reference.
+  const covered = key => usable.filter(r => r[key] !== null && r[key] !== undefined).length > usable.length * 0.8;
+  const has = { sot: covered('sotProj'), da: covered('daProj'), atk: covered('atkProj'), poss: covered('possProj') };
+  console.log('\nfeature coverage: ' + Object.entries(has).map(([k, v]) => `${k}=${v ? 'yes' : 'NO'}`).join('  '));
+
+  // Each volume metric tested alone and on top of corner form. Territorial
+  // metrics (dangerous attacks, attacks, possession) are the untested ones —
+  // they separate dominant from dominated sides harder than corners do.
   const designs = {
     null: () => [1],
     corners: r => [1, r.cProj],
-    sot: r => [1, r.sotProj ?? 0],
-    'corners+sot': r => [1, r.cProj, r.sotProj ?? 0],
+    shots: r => [1, r.sProj],
     'corners+shots': r => [1, r.cProj, r.sProj],
   };
-  if (!hasSot) { delete designs.sot; delete designs['corners+sot']; }
+  if (has.sot) { designs.sot = r => [1, r.sotProj]; designs['corners+sot'] = r => [1, r.cProj, r.sotProj]; }
+  if (has.da) { designs.dangAtt = r => [1, r.daProj]; designs['corners+dangAtt'] = r => [1, r.cProj, r.daProj]; }
+  if (has.atk) { designs.attacks = r => [1, r.atkProj]; designs['corners+attacks'] = r => [1, r.cProj, r.atkProj]; }
+  if (has.poss) designs['corners+poss'] = r => [1, r.cProj, r.possProj];
+  // kitchen sink: everything covered, together
+  designs['ALL covered'] = r => [1, r.cProj, r.sProj]
+    .concat(has.sot ? [r.sotProj] : []).concat(has.da ? [r.daProj] : [])
+    .concat(has.atk ? [r.atkProj] : []).concat(has.poss ? [r.possProj] : []);
   const keys = Object.keys(designs);
   const preds = Object.fromEntries(keys.map(k => [k, []]));
   const actual = [];
