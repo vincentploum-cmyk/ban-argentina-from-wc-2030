@@ -148,7 +148,9 @@ for (const m of raw) {
   lg.set(m.league, L);
 }
 
-const usable = rows.filter(r => r.sProj !== null);
+// Require BOTH shot and SoT features so every model is compared on identical
+// fixtures — the corners-vs-corners+sot delta must not be a sample artifact.
+const usable = rows.filter(r => r.sProj !== null && r.sotProj !== null);
 console.log('\nC) WALK-FORWARD PREDICTION OF PER-TEAM FIRST-HALF CORNERS');
 rule();
 console.log('target: one team\'s own first-half corners (2 obs/match). This is where the');
@@ -157,13 +159,18 @@ if (usable.length < MIN_TRAIN + 50) {
   console.log(`\nOnly ${usable.length} observations have shot features — need >= ${MIN_TRAIN + 50}.`);
 } else {
   const hasSot = usable.filter(r => r.sotProj !== null).length > usable.length * 0.8;
+  // Ordered so the production-relevant comparison is adjacent and obvious:
+  // `corners` is the current production feature; `corners+sot` is the exact
+  // proposed upgrade (production carries sot/sota, not total shots). The
+  // total-shots variants are kept only as a richer-data reference.
   const designs = {
     null: () => [1],
     corners: r => [1, r.cProj],
-    shots: r => [1, r.sProj],
-    both: r => [1, r.cProj, r.sProj],
+    sot: r => [1, r.sotProj ?? 0],
+    'corners+sot': r => [1, r.cProj, r.sotProj ?? 0],
+    'corners+shots': r => [1, r.cProj, r.sProj],
   };
-  if (hasSot) designs['shots+sot'] = r => [1, r.sProj, r.sotProj ?? 0];
+  if (!hasSot) { delete designs.sot; delete designs['corners+sot']; }
   const keys = Object.keys(designs);
   const preds = Object.fromEntries(keys.map(k => [k, []]));
   const actual = [];
