@@ -105,71 +105,85 @@ const tstate = n => { let s = st.get(n); if (!s) { s = { home: [], away: [] }; s
 const lg = new Map();
 
 const rows = [];
+// Emit TWO observations per match — one per attacking side. Predicting each
+// team's own FH corners is where the shots signal lives (A and B are team-level);
+// the match total cancels it. target = that side's FH corners; features = that
+// side's attacking volume vs the opponent's defensive volume, all point-in-time.
 for (const m of raw) {
   const ht = tstate(m.home), at = tstate(m.away);
-  const L = lg.get(m.league) ?? { fh: [], c: [], s: [] };
+  const L = lg.get(m.league) ?? { fhTeam: [], cFor: [], sFor: [] };
   const haveShots = m.shots && Number.isFinite(m.shots.h) && Number.isFinite(m.shots.a);
+  const haveSot = m.sot && Number.isFinite(m.sot.h) && Number.isFinite(m.sot.a);
   const haveFH = Number.isFinite(m.fhHc) && Number.isFinite(m.fhAc);
 
-  const enough = ht.home.length >= MIN_PRIOR && at.away.length >= MIN_PRIOR && L.c.length >= 30;
+  const enough = ht.home.length >= MIN_PRIOR && at.away.length >= MIN_PRIOR && L.cFor.length >= 60;
   if (enough && haveFH) {
     const hH = tail(ht.home, WINDOW), aA = tail(at.away, WINDOW);
-    const lgC = mean(tail(L.c, 200)), lgS = mean(tail(L.s, 200)), lgFH = mean(tail(L.fh, 200));
-    const cPrior = lgC / 2, sPrior = lgS / 2;
-    // corner-based expected full-match corners
-    const cornProj =
-      shrunk(hH.map(x => x.cf), cPrior, SHRINK) + shrunk(aA.map(x => x.ca), cPrior, SHRINK) +
-      shrunk(aA.map(x => x.cf), cPrior, SHRINK) + shrunk(hH.map(x => x.ca), cPrior, SHRINK);
-    // shot-based expected volume (only if this team-history has shots)
-    const hHs = hH.filter(x => x.sf !== null), aAs = aA.filter(x => x.sf !== null);
-    const haveShotFeat = hHs.length >= MIN_PRIOR && aAs.length >= MIN_PRIOR;
-    const shotProj = haveShotFeat
-      ? shrunk(hHs.map(x => x.sf), sPrior, SHRINK) + shrunk(aAs.map(x => x.sa), sPrior, SHRINK) +
-        shrunk(aAs.map(x => x.sf), sPrior, SHRINK) + shrunk(hHs.map(x => x.sa), sPrior, SHRINK)
-      : null;
-    rows.push({ date: m.date, cornProj, shotProj, haveShotFeat, lgFH, actual: m.fhHc + m.fhAc });
+    const lgCFor = mean(tail(L.cFor, 400)), lgSFor = mean(tail(L.sFor, 400)), lgFHteam = mean(tail(L.fhTeam, 400));
+
+    // one attacker's projection: own attacking rate blended with opp conceding rate
+    const side = (atkRoll, defRoll, target) => {
+      const aS = atkRoll.filter(x => x.sf !== null), dS = defRoll.filter(x => x.sf !== null);
+      if (aS.length < MIN_PRIOR || dS.length < MIN_PRIOR) return null;
+      return {
+        date: m.date, target, lgFHteam,
+        cProj: shrunk(atkRoll.map(x => x.cf), lgCFor, SHRINK) + shrunk(defRoll.map(x => x.ca), lgCFor, SHRINK),
+        sProj: shrunk(aS.map(x => x.sf), lgSFor, SHRINK) + shrunk(dS.map(x => x.sa), lgSFor, SHRINK),
+        sotProj: (aS[0].sotf !== null && dS[0].sota !== null)
+          ? shrunk(aS.map(x => x.sotf), lgSFor / 3, SHRINK) + shrunk(dS.map(x => x.sota), lgSFor / 3, SHRINK) : null,
+      };
+    };
+    const homeAtk = side(hH, aA, m.fhHc);   // home attacking vs away defending
+    const awayAtk = side(aA, hH, m.fhAc);   // away attacking vs home defending
+    if (homeAtk) rows.push(homeAtk);
+    if (awayAtk) rows.push(awayAtk);
   }
 
   // update state AFTER emitting
-  ht.home.push({ cf: m.hc, ca: m.ac, sf: haveShots ? m.shots.h : null, sa: haveShots ? m.shots.a : null });
-  at.away.push({ cf: m.ac, ca: m.hc, sf: haveShots ? m.shots.a : null, sa: haveShots ? m.shots.h : null });
-  L.c.push(m.hc + m.ac); L.s.push(haveShots ? m.shots.h + m.shots.a : mean(tail(L.s, 50)) || 25);
-  L.fh.push(haveFH ? m.fhHc + m.fhAc : mean(tail(L.fh, 50)) || 4);
+  ht.home.push({ cf: m.hc, ca: m.ac, sf: haveShots ? m.shots.h : null, sa: haveShots ? m.shots.a : null, sotf: haveSot ? m.sot.h : null, sota: haveSot ? m.sot.a : null });
+  at.away.push({ cf: m.ac, ca: m.hc, sf: haveShots ? m.shots.a : null, sa: haveShots ? m.shots.h : null, sotf: haveSot ? m.sot.a : null, sota: haveSot ? m.sot.h : null });
+  if (haveFH) { L.fhTeam.push(m.fhHc); L.fhTeam.push(m.fhAc); }
+  L.cFor.push(m.hc); L.cFor.push(m.ac);
+  if (haveShots) { L.sFor.push(m.shots.h); L.sFor.push(m.shots.a); }
   lg.set(m.league, L);
 }
 
-// keep rows with shot features so all models are compared on the SAME fixtures
-const usable = rows.filter(r => r.haveShotFeat);
-console.log('\nC) WALK-FORWARD PREDICTION OF FIRST-HALF CORNERS');
+const usable = rows.filter(r => r.sProj !== null);
+console.log('\nC) WALK-FORWARD PREDICTION OF PER-TEAM FIRST-HALF CORNERS');
 rule();
+console.log('target: one team\'s own first-half corners (2 obs/match). This is where the');
+console.log('team-level signal from A/B lives — the match total cancels it out.');
 if (usable.length < MIN_TRAIN + 50) {
-  console.log(`Only ${usable.length} fixtures have both shot features and FH corners — need >= ${MIN_TRAIN + 50}.`);
+  console.log(`\nOnly ${usable.length} observations have shot features — need >= ${MIN_TRAIN + 50}.`);
 } else {
+  const hasSot = usable.filter(r => r.sotProj !== null).length > usable.length * 0.8;
   const designs = {
     null: () => [1],
-    corners: r => [1, r.cornProj],
-    shots: r => [1, r.shotProj],
-    both: r => [1, r.cornProj, r.shotProj],
+    corners: r => [1, r.cProj],
+    shots: r => [1, r.sProj],
+    both: r => [1, r.cProj, r.sProj],
   };
-  const preds = { null: [], corners: [], shots: [], both: [] };
+  if (hasSot) designs['shots+sot'] = r => [1, r.sProj, r.sotProj ?? 0];
+  const keys = Object.keys(designs);
+  const preds = Object.fromEntries(keys.map(k => [k, []]));
   const actual = [];
   const coefs = {};
   for (let i = MIN_TRAIN; i < usable.length; i++) {
     if ((i - MIN_TRAIN) % REFIT === 0) {
       const train = usable.slice(0, i);
-      for (const k of Object.keys(designs)) coefs[k] = fitOLS(train.map(designs[k]), train.map(r => r.actual), 1e-4);
+      for (const k of keys) coefs[k] = fitOLS(train.map(designs[k]), train.map(r => r.target), 1e-4);
     }
     const r = usable[i];
-    actual.push(r.actual);
-    for (const k of Object.keys(designs)) {
+    actual.push(r.target);
+    for (const k of keys) {
       const x = designs[k](r); let mu = 0; const c = coefs[k];
       for (let j = 0; j < c.length; j++) mu += c[j] * x[j];
-      preds[k].push(isFinite(mu) && mu > 0 && mu < 15 ? mu : r.lgFH);
+      preds[k].push(isFinite(mu) && mu > 0 && mu < 10 ? mu : r.lgFHteam);
     }
   }
-  console.log(pad('feature set', 16) + pad('MAE', 10, true) + pad('RMSE', 10, true) + pad('corr', 9, true) + pad('vs null (MAE)', 15, true));
+  console.log('\n' + pad('feature set', 16) + pad('MAE', 10, true) + pad('RMSE', 10, true) + pad('corr', 9, true) + pad('vs null (MAE)', 15, true));
   const nMae = mae(actual, preds.null);
-  for (const k of ['null', 'corners', 'shots', 'both']) {
+  for (const k of keys) {
     const m = mae(actual, preds[k]);
     const gain = ((nMae - m) / nMae) * 100;
     console.log(
@@ -178,23 +192,23 @@ if (usable.length < MIN_TRAIN + 50) {
       pad(k === 'null' ? '-' : `${gain >= 0 ? '+' : ''}${gain.toFixed(2)}%`, 15, true),
     );
   }
-  console.log(`\nevaluated ${actual.length} fixtures, mean FH corners ${mean(actual).toFixed(2)}`);
+  console.log(`\nevaluated ${actual.length} team-observations, mean per-team FH corners ${mean(actual).toFixed(2)}`);
 
-  // ---- D. ceiling for FH corners -----------------------------------------
-  const V = mean(actual.map(x => (x - mean(actual)) ** 2));
+  // ---- D. ceiling for per-team FH corners --------------------------------
   const mm = mean(actual);
+  const V = mean(actual.map(x => (x - mm) ** 2));
   const rateVar = Math.max(0, V - mm);
-  console.log('\nD) FH-CORNER PREDICTABILITY CEILING');
+  console.log('\nD) PER-TEAM FH-CORNER PREDICTABILITY CEILING');
   rule();
   console.log(`mean ${mm.toFixed(2)}, variance ${V.toFixed(2)}, Poisson floor ${mm.toFixed(2)}`);
   console.log(`max explainable R^2 = ${(rateVar / V * 100).toFixed(0)}%   ->   max correlation r = ${Math.sqrt(rateVar / V).toFixed(2)}`);
-  console.log('  judge the "corr" column in C against this ceiling, not against 1.0.');
+  console.log('  judge the "corr" column against this ceiling, not against 1.0.');
 }
 
 console.log('\nWHAT A WIN LOOKS LIKE');
 rule();
 console.log('- B: shots more reliable than corners (they should be — higher volume).');
-console.log('- C: "shots" beats "corners" on MAE/corr, and "both" is best. If so, your');
-console.log('  thesis holds: shot history predicts FH corners better than corner history.');
-console.log('- All of C judged against the D ceiling. Beating the mean at all on FH corners');
+console.log('- C: "shots" beats "corners" on corr/MAE, "both" or "shots+sot" best. If so,');
+console.log('  your thesis holds: shot history predicts FH corners better than corner history.');
+console.log('- All of C judged against the D ceiling. Beating the mean here at all is more');
 console.log('  would already be more than the match total ever managed.');
