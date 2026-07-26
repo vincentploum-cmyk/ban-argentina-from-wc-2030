@@ -73,6 +73,20 @@ async function fetchSeason(sid) {
       if (!m.home_name || !m.away_name || !m.date_unix) continue;
 
       const o1 = num(m.odds_ft_1), ox = num(m.odds_ft_x), o2 = num(m.odds_ft_2);
+
+      // Corner 3-way: which side wins the corner count (home / draw / away).
+      const c1 = num(m.odds_corners_1), cx = num(m.odds_corners_x), c2 = num(m.odds_corners_2);
+      const corner3 = c1 > 1 && c2 > 1 ? { h: c1, d: cx > 1 ? cx : null, a: c2 } : null;
+
+      // Match-total corner over/under ladder. FootyStats encodes the line in
+      // the field name (o75 -> 7.5), and uses 0 for "no price".
+      const cornerOU = {};
+      for (const [suffix, line] of [['75', '7.5'], ['85', '8.5'], ['95', '9.5'], ['105', '10.5'], ['115', '11.5']]) {
+        const ov = num(m[`odds_corners_over_${suffix}`]);
+        const un = num(m[`odds_corners_under_${suffix}`]);
+        if (ov > 1 && un > 1) cornerOU[line] = { over: ov, under: un };
+      }
+
       out.push({
         date: m.date_unix,
         league: `S${sid}`,
@@ -80,6 +94,8 @@ async function fetchSeason(sid) {
         away: m.away_name,
         hc, ac,
         ...(o1 > 1 && ox > 1 && o2 > 1 ? { odds: { h: o1, d: ox, a: o2 } } : {}),
+        ...(corner3 ? { corner3 } : {}),
+        ...(Object.keys(cornerOU).length ? { cornerOU } : {}),
       });
     }
 
@@ -97,7 +113,9 @@ for (const sid of SEASONS) {
     const rows = await fetchSeason(sid);
     all.push(...rows);
     const withOdds = rows.filter(r => r.odds).length;
-    console.log(`${rows.length} matches with corners (${withOdds} with 1X2 odds)`);
+    const with3 = rows.filter(r => r.corner3).length;
+    const withOU = rows.filter(r => r.cornerOU).length;
+    console.log(`${rows.length} matches with corners (${withOdds} 1X2, ${with3} corner-3way, ${withOU} corner-O/U)`);
   } catch (e) {
     console.log(`FAILED: ${e.message}`);
   }

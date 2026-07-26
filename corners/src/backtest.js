@@ -32,17 +32,20 @@ export function runBacktest(matches, opts = {}) {
   const target = opts.target ?? 'total';
   let rows = buildDataset(matches, opts);
 
-  // Favourite-corners target: re-point actual/baseline/lgMean onto the
-  // favourite so every model runs unchanged. Rows with no odds (no favourite)
-  // are dropped — they cannot define a favourite corner count.
-  if (target === 'fav') {
+  // Favourite / underdog targets: re-point actual/baseline/lgMean onto that
+  // side so every model runs unchanged. Rows with no odds (no favourite) are
+  // dropped — they cannot define a favourite/underdog corner count.
+  if (target === 'fav' || target === 'dog') {
     const burnIn = rows.skippedBurnIn;
     rows = rows.filter(r => r.favIsHome !== null);
     rows.skippedBurnIn = burnIn;
+    const pick = target === 'fav'
+      ? { a: 'actualFav', b: 'favBaseline', l: 'favLgMean' }
+      : { a: 'actualDog', b: 'dogBaseline', l: 'dogLgMean' };
     rows.forEach(r => {
-      r.actual = r.actualFav;
-      r.baseline = r.favBaseline;
-      r.lgMean = r.favLgMean;
+      r.actual = r[pick.a];
+      r.baseline = r[pick.b];
+      r.lgMean = r[pick.l];
     });
   }
 

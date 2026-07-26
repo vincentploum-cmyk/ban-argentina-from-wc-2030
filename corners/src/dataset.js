@@ -132,12 +132,23 @@ function makeRow(m, ht, at, lgHist, { window, shrink, leagueWindow }) {
     // at the total level).
     favBaseline: favIsHome === null ? null : (favIsHome ? expHome : expAway),
     favLgMean: favIsHome === null ? null : (favIsHome ? lgHC : lgAC),
+    // Underdog mirror — needed to model the corner 3-way market (which side
+    // wins the corner count), the real priced home for the favourite signal.
+    dogBaseline: favIsHome === null ? null : (favIsHome ? expAway : expHome),
+    dogLgMean: favIsHome === null ? null : (favIsHome ? lgAC : lgHC),
     nPriorHome: ht.home.length,
     nPriorAway: at.away.length,
+    // priced corner markets. corner3 is oriented to the favourite here, where
+    // favIsHome is known: { fav, draw, dog } decimal odds.
+    corner3: (m.corner3 && favIsHome !== null)
+      ? { fav: favIsHome ? m.corner3.h : m.corner3.a, draw: m.corner3.d, dog: favIsHome ? m.corner3.a : m.corner3.h }
+      : null,
+    cornerOU: m.cornerOU ?? null,   // { "10.5": {over, under}, ... }
     // outcomes (never used as features)
     actualHome: m.hc,
     actualAway: m.ac,
     actual: m.hc + m.ac,
     actualFav: favIsHome === null ? null : (favIsHome ? m.hc : m.ac),
+    actualDog: favIsHome === null ? null : (favIsHome ? m.ac : m.hc),
   };
 }
