@@ -18,6 +18,7 @@
 
 import { readFileSync } from 'node:fs';
 import { fitOLS, mean, mae, rmse } from './stats.js';
+import { fitRatings, ratingProjection } from './ratings.js';
 
 const argv = process.argv.slice(2);
 const arg = (k, d) => { const i = argv.indexOf(`--${k}`); return i >= 0 && argv[i + 1] ? argv[i + 1] : d; };
@@ -111,7 +112,7 @@ const rows = [];
 // side's attacking volume vs the opponent's defensive volume, all point-in-time.
 for (const m of raw) {
   const ht = tstate(m.home), at = tstate(m.away);
-  const L = lg.get(m.league) ?? { fhTeam: [], cFor: [], sFor: [] };
+  const L = lg.get(m.league) ?? { fhTeam: [], cFor: [], sFor: [], hist: [], ratC: null, ratDA: null, fitAt: -1 };
   const haveShots = m.shots && Number.isFinite(m.shots.h) && Number.isFinite(m.shots.a);
   const haveSot = m.sot && Number.isFinite(m.sot.h) && Number.isFinite(m.sot.a);
   const haveFH = Number.isFinite(m.fhHc) && Number.isFinite(m.fhAc);
@@ -121,8 +122,17 @@ for (const m of raw) {
     const hH = tail(ht.home, WINDOW), aA = tail(at.away, WINDOW);
     const lgCFor = mean(tail(L.cFor, 400)), lgSFor = mean(tail(L.sFor, 400)), lgFHteam = mean(tail(L.fhTeam, 400));
 
+    // Refit opponent-adjusted ratings periodically from ALL prior matches in
+    // this league (time-decayed). Strictly point-in-time: L.hist only ever
+    // contains matches already played.
+    if (L.hist.length >= 40 && L.hist.length - L.fitAt >= 60) {
+      L.ratC = fitRatings(L.hist.map(g => ({ date: g.date, home: g.home, away: g.away, hv: g.hc, av: g.ac })), m.date);
+      L.ratDA = fitRatings(L.hist.filter(g => g.dah != null).map(g => ({ date: g.date, home: g.home, away: g.away, hv: g.dah, av: g.daa })), m.date);
+      L.fitAt = L.hist.length;
+    }
+
     // one attacker's projection: own attacking rate blended with opp conceding rate
-    const side = (atkRoll, defRoll, target) => {
+    const side = (atkRoll, defRoll, target, atkName, defName, isHome) => {
       const aS = atkRoll.filter(x => x.sf !== null), dS = defRoll.filter(x => x.sf !== null);
       if (aS.length < MIN_PRIOR || dS.length < MIN_PRIOR) return null;
       // Generic for/against blend for any volume metric, null when uncovered.
@@ -139,10 +149,13 @@ for (const m of raw) {
         daProj: blend('daf', 'daa', 40),      // dangerous attacks ~40/team/match
         atkProj: blend('atkf', 'atka', 100),  // attacks ~100/team/match
         possProj: blend('possf', 'possa', 50),
+        // opponent-adjusted ratings — same data, far less estimation noise
+        ratCProj: ratingProjection(L.ratC, atkName, defName, isHome),
+        ratDAProj: ratingProjection(L.ratDA, atkName, defName, isHome),
       };
     };
-    const homeAtk = side(hH, aA, m.fhHc);   // home attacking vs away defending
-    const awayAtk = side(aA, hH, m.fhAc);   // away attacking vs home defending
+    const homeAtk = side(hH, aA, m.fhHc, m.home, m.away, true);
+    const awayAtk = side(aA, hH, m.fhAc, m.away, m.home, false);
     if (homeAtk) rows.push(homeAtk);
     if (awayAtk) rows.push(awayAtk);
   }
@@ -165,6 +178,7 @@ for (const m of raw) {
     atkf: g(m.attacks, 'a'), atka: g(m.attacks, 'h'),
     possf: g(m.poss, 'a'), possa: g(m.poss, 'h'),
   });
+  L.hist.push({ date: m.date, home: m.home, away: m.away, hc: m.hc, ac: m.ac, dah: g(m.dangAtt, 'h'), daa: g(m.dangAtt, 'a') });
   if (haveFH) { L.fhTeam.push(m.fhHc); L.fhTeam.push(m.fhAc); }
   L.cFor.push(m.hc); L.cFor.push(m.ac);
   if (haveShots) { L.sFor.push(m.shots.h); L.sFor.push(m.shots.a); }
@@ -198,6 +212,16 @@ if (usable.length < MIN_TRAIN + 50) {
   if (has.da) { designs.dangAtt = r => [1, r.daProj]; designs['corners+dangAtt'] = r => [1, r.cProj, r.daProj]; }
   if (has.atk) { designs.attacks = r => [1, r.atkProj]; designs['corners+attacks'] = r => [1, r.cProj, r.atkProj]; }
   if (has.poss) designs['corners+poss'] = r => [1, r.cProj, r.possProj];
+  // Ratings: opponent-adjusted, all-history, time-decayed — the low-noise
+  // replacement for rolling averages. This is the key comparison.
+  if (covered('ratCProj')) {
+    designs['RATINGS corners'] = r => [1, r.ratCProj];
+    if (covered('ratDAProj')) {
+      designs['RATINGS dangAtt'] = r => [1, r.ratDAProj];
+      designs['RATINGS both'] = r => [1, r.ratCProj, r.ratDAProj];
+      designs['RATINGS + rolling'] = r => [1, r.ratCProj, r.ratDAProj, r.cProj, r.daProj ?? 0];
+    }
+  }
   // kitchen sink: everything covered, together
   designs['ALL covered'] = r => [1, r.cProj, r.sProj]
     .concat(has.sot ? [r.sotProj] : []).concat(has.da ? [r.daProj] : [])
