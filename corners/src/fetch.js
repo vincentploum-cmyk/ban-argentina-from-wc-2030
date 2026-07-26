@@ -87,6 +87,23 @@ async function fetchSeason(sid) {
         if (ov > 1 && un > 1) cornerOU[line] = { over: ov, under: un };
       }
 
+      // Shots / possession — the volume metrics that generate corners. Field
+      // names vary slightly across FootyStats payloads, so try candidates and
+      // take the first present. Reported coverage tells us what actually landed.
+      const pick = cands => { for (const c of cands) { const v = num(m[c]); if (v !== null) return v; } return null; };
+      const shotsH = pick(['team_a_shots', 'homeShots', 'home_shots']);
+      const shotsA = pick(['team_b_shots', 'awayShots', 'away_shots']);
+      const sotH = pick(['team_a_shotsOnTarget', 'team_a_shots_on_target', 'homeShotsOnTarget']);
+      const sotA = pick(['team_b_shotsOnTarget', 'team_b_shots_on_target', 'awayShotsOnTarget']);
+      const possH = pick(['team_a_possession', 'home_possession']);
+      const possA = pick(['team_b_possession', 'away_possession']);
+      const daH = pick(['team_a_dangerous_attacks', 'team_a_dangerousAttacks']);
+      const daA = pick(['team_b_dangerous_attacks', 'team_b_dangerousAttacks']);
+      const shots = (shotsH !== null && shotsA !== null) ? { h: shotsH, a: shotsA } : null;
+      const sot = (sotH !== null && sotA !== null) ? { h: sotH, a: sotA } : null;
+      const poss = (possH !== null && possA !== null) ? { h: possH, a: possA } : null;
+      const dangAtt = (daH !== null && daA !== null) ? { h: daH, a: daA } : null;
+
       // FootyStats' OWN pre-game corner projection and over-probabilities.
       // pot = projected total corners; poX = their estimated P(over X.5).
       const pot = num(m.corners_potential);
@@ -105,6 +122,10 @@ async function fetchSeason(sid) {
         away: m.away_name,
         hc, ac,
         fhHc: num(m.team_a_fh_corners), fhAc: num(m.team_b_fh_corners),
+        ...(shots ? { shots } : {}),
+        ...(sot ? { sot } : {}),
+        ...(poss ? { poss } : {}),
+        ...(dangAtt ? { dangAtt } : {}),
         ...(o1 > 1 && ox > 1 && o2 > 1 ? { odds: { h: o1, d: ox, a: o2 } } : {}),
         ...(corner3 ? { corner3 } : {}),
         ...(Object.keys(cornerOU).length ? { cornerOU } : {}),
@@ -126,9 +147,10 @@ for (const sid of SEASONS) {
     const rows = await fetchSeason(sid);
     all.push(...rows);
     const withOdds = rows.filter(r => r.odds).length;
-    const with3 = rows.filter(r => r.corner3).length;
+    const withShots = rows.filter(r => r.shots).length;
+    const withFH = rows.filter(r => Number.isFinite(r.fhHc) && Number.isFinite(r.fhAc)).length;
     const withPot = rows.filter(r => r.potential).length;
-    console.log(`${rows.length} matches with corners (${withOdds} 1X2, ${with3} corner-3way, ${withPot} FootyStats corner projection)`);
+    console.log(`${rows.length} matches (${withShots} w/ shots, ${withFH} w/ FH corners, ${withPot} w/ FS projection)`);
   } catch (e) {
     console.log(`FAILED: ${e.message}`);
   }
